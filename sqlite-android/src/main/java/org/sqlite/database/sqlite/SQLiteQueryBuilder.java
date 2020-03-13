@@ -22,8 +22,8 @@ package org.sqlite.database.sqlite;
 
 import android.database.Cursor;
 import android.database.DatabaseUtils;
-import org.sqlite.os.CancellationSignal;
-import org.sqlite.os.OperationCanceledException;
+import android.os.CancellationSignal;
+import android.os.OperationCanceledException;
 import android.provider.BaseColumns;
 import android.text.TextUtils;
 import android.util.Log;
@@ -390,8 +390,7 @@ public class SQLiteQueryBuilder
             // in both the wrapped and original forms.
             String sqlForValidation = buildQuery(projectionIn, "(" + selection + ")", groupBy,
                     having, sortOrder, limit);
-            validateQuerySql(db, sqlForValidation,
-                    cancellationSignal); // will throw if query is invalid
+            db.validateSql(sqlForValidation, cancellationSignal); // will throw if query is invalid
         }
 
         String sql = buildQuery(
@@ -405,16 +404,6 @@ public class SQLiteQueryBuilder
                 mFactory, sql, selectionArgs,
                 SQLiteDatabase.findEditTable(mTables),
                 cancellationSignal); // will throw if query is invalid
-    }
-
-    /**
-     * Verifies that a SQL SELECT statement is valid by compiling it.
-     * If the SQL statement is not valid, this method will throw a {@link SQLiteException}.
-     */
-    private void validateQuerySql(SQLiteDatabase db, String sql,
-            CancellationSignal cancellationSignal) {
-        db.getThreadSession().prepare(sql,
-                db.getThreadDefaultConnectionFlags(true /*readOnly*/), cancellationSignal, null);
     }
 
     /**

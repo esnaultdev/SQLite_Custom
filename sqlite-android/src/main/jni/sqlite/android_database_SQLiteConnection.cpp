@@ -30,10 +30,6 @@
 #include <unistd.h>
 #include <assert.h>
 
-#if 0
-#include <androidfw/CursorWindow.h>
-#endif
-
 #include <sqlite3.h>
 #if 0
 #include <sqlite3_android.h>
@@ -62,6 +58,10 @@ namespace android {
  */
 static const int BUSY_TIMEOUT_MS = 2500;
 
+/* The original code uses AndroidRuntime::getJNIEnv() to obtain a 
+** pointer to the VM. This is not available in the NDK, so instead
+** the following global variable is set as part of this module's
+** JNI_OnLoad method.  */
 static JavaVM *gpJavaVM = 0;
 
 static struct {
@@ -308,17 +308,7 @@ static void nativeRegisterCustomFunction(JNIEnv* env, jclass clazz, jlong connec
 
 static void nativeRegisterLocalizedCollators(JNIEnv* env, jclass clazz, jlong connectionPtr,
         jstring localeStr) {
-    SQLiteConnection* connection = reinterpret_cast<SQLiteConnection*>(connectionPtr);
-
-    const char* locale = env->GetStringUTFChars(localeStr, NULL);
-#if 0
-    int err = register_localized_collators(connection->db, locale, UTF16_STORAGE);
-    env->ReleaseStringUTFChars(localeStr, locale);
-
-    if (err != SQLITE_OK) {
-        throw_sqlite3_exception(env, connection->db);
-    }
-#endif
+  /* Localized collators are not supported. */
 }
 
 static jlong nativePrepareStatement(JNIEnv* env, jclass clazz, jlong connectionPtr,
@@ -366,7 +356,6 @@ static void nativeFinalizeStatement(JNIEnv* env, jclass clazz, jlong connectionP
 
 static jint nativeGetParameterCount(JNIEnv* env, jclass clazz, jlong connectionPtr,
         jlong statementPtr) {
-    SQLiteConnection* connection = reinterpret_cast<SQLiteConnection*>(connectionPtr);
     sqlite3_stmt* statement = reinterpret_cast<sqlite3_stmt*>(statementPtr);
 
     return sqlite3_bind_parameter_count(statement);
@@ -374,7 +363,6 @@ static jint nativeGetParameterCount(JNIEnv* env, jclass clazz, jlong connectionP
 
 static jboolean nativeIsReadOnly(JNIEnv* env, jclass clazz, jlong connectionPtr,
         jlong statementPtr) {
-    SQLiteConnection* connection = reinterpret_cast<SQLiteConnection*>(connectionPtr);
     sqlite3_stmt* statement = reinterpret_cast<sqlite3_stmt*>(statementPtr);
 
     return sqlite3_stmt_readonly(statement) != 0;
@@ -382,7 +370,6 @@ static jboolean nativeIsReadOnly(JNIEnv* env, jclass clazz, jlong connectionPtr,
 
 static jint nativeGetColumnCount(JNIEnv* env, jclass clazz, jlong connectionPtr,
         jlong statementPtr) {
-    SQLiteConnection* connection = reinterpret_cast<SQLiteConnection*>(connectionPtr);
     sqlite3_stmt* statement = reinterpret_cast<sqlite3_stmt*>(statementPtr);
 
     return sqlite3_column_count(statement);
@@ -390,7 +377,6 @@ static jint nativeGetColumnCount(JNIEnv* env, jclass clazz, jlong connectionPtr,
 
 static jstring nativeGetColumnName(JNIEnv* env, jclass clazz, jlong connectionPtr,
         jlong statementPtr, jint index) {
-    SQLiteConnection* connection = reinterpret_cast<SQLiteConnection*>(connectionPtr);
     sqlite3_stmt* statement = reinterpret_cast<sqlite3_stmt*>(statementPtr);
 
     const jchar* name = static_cast<const jchar*>(sqlite3_column_name16(statement, index));
@@ -481,6 +467,12 @@ static void nativeResetStatementAndClearBindings(JNIEnv* env, jclass clazz, jlon
 }
 
 static int executeNonQuery(JNIEnv* env, SQLiteConnection* connection, sqlite3_stmt* statement) {
+    int err;
+    while( SQLITE_ROW==(err=sqlite3_step(statement)) );
+    if( err!=SQLITE_DONE ){
+      throw_sqlite3_exception(env, connection->db);
+    }
+#if 0
     int err = sqlite3_step(statement);
     if (err == SQLITE_ROW) {
         throw_sqlite3_exception(env,
@@ -488,6 +480,7 @@ static int executeNonQuery(JNIEnv* env, SQLiteConnection* connection, sqlite3_st
     } else if (err != SQLITE_DONE) {
         throw_sqlite3_exception(env, connection->db);
     }
+#endif
     return err;
 }
 
@@ -555,37 +548,6 @@ static jstring nativeExecuteForString(JNIEnv* env, jclass clazz,
 }
 
 static int createAshmemRegionWithData(JNIEnv* env, const void* data, size_t length) {
-#if 0
-    int error = 0;
-    int fd = ashmem_create_region(NULL, length);
-    if (fd < 0) {
-        error = errno;
-        ALOGE("ashmem_create_region failed: %s", strerror(error));
-    } else {
-        if (length > 0) {
-            void* ptr = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-            if (ptr == MAP_FAILED) {
-                error = errno;
-                ALOGE("mmap failed: %s", strerror(error));
-            } else {
-                memcpy(ptr, data, length);
-                munmap(ptr, length);
-            }
-        }
-
-        if (!error) {
-            if (ashmem_set_prot_region(fd, PROT_READ) < 0) {
-                error = errno;
-                ALOGE("ashmem_set_prot_region failed: %s", strerror(errno));
-            } else {
-                return fd;
-            }
-        }
-
-        close(fd);
-    }
-
-#endif
     jniThrowIOException(env, -1);
     return -1;
 }

@@ -19,7 +19,7 @@ LOCAL_CFLAGS += -DSQLITE_ENABLE_MEMORY_MANAGEMENT=1
 LOCAL_CFLAGS += -DSQLITE_DEFAULT_AUTOVACUUM=1
 LOCAL_CFLAGS += -DSQLITE_TEMP_STORE=3
 LOCAL_CFLAGS += -Wno-unused-parameter -Wno-int-to-pointer-cast
-LOCAL_CFLAGS += -Wno-maybe-uninitialized -Wno-parentheses
+LOCAL_CFLAGS += -Wno-uninitialized -Wno-parentheses
 LOCAL_CPPFLAGS += -Wno-conversion-null
 LOCAL_CPPFLAGS += -std=c++11
 

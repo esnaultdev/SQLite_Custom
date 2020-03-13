@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "org.sqlite.app.customsqlite"
-        minSdkVersion 15
+        minSdkVersion 16
         targetSdkVersion 28
     }
 

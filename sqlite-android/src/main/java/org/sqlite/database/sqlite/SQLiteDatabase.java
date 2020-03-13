@@ -22,22 +22,21 @@ package org.sqlite.database.sqlite;
 
 import android.content.ContentValues;
 import android.database.Cursor;
-import android.database.DatabaseUtils;
+import org.sqlite.database.DatabaseErrorHandler;
+import org.sqlite.database.DatabaseUtils;
+import org.sqlite.database.DefaultDatabaseErrorHandler;
+import org.sqlite.database.SQLException;
+import org.sqlite.database.sqlite.SQLiteDebug.DbStats;
+import android.os.CancellationSignal;
 import android.os.Looper;
+import android.os.OperationCanceledException;
 import android.text.TextUtils;
 import android.util.EventLog;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Printer;
 
-import org.sqlite.database.DatabaseErrorHandler;
-import org.sqlite.database.DefaultDatabaseErrorHandler;
-import org.sqlite.database.ExtraUtils;
-import org.sqlite.database.SQLException;
 import org.sqlite.database.enums.Tokenizer;
-import org.sqlite.database.sqlite.SQLiteDebug.DbStats;
-import org.sqlite.os.CancellationSignal;
-import org.sqlite.os.OperationCanceledException;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -743,14 +742,16 @@ public final class SQLiteDatabase extends SQLiteClosable {
         File dir = file.getParentFile();
         if (dir != null) {
             final String prefix = file.getName() + "-mj";
-            final FileFilter filter = new FileFilter() {
+            File[] files = dir.listFiles(new FileFilter() {
                 @Override
                 public boolean accept(File candidate) {
                     return candidate.getName().startsWith(prefix);
                 }
-            };
-            for (File masterJournal : dir.listFiles(filter)) {
-                deleted |= masterJournal.delete();
+            });
+            if (files != null) {
+                for (File masterJournal : files) {
+                    deleted |= masterJournal.delete();
+                }
             }
         }
         return deleted;
@@ -887,7 +888,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
      * @return the database version
      */
     public int getVersion() {
-        return ((Long) ExtraUtils.longForQuery(this, "PRAGMA user_version;", null)).intValue();
+        return ((Long) DatabaseUtils.longForQuery(this, "PRAGMA user_version;", null)).intValue();
     }
 
     /**
@@ -905,7 +906,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
      * @return the new maximum database size
      */
     public long getMaximumSize() {
-        long pageCount = ExtraUtils.longForQuery(this, "PRAGMA max_page_count;", null);
+        long pageCount = DatabaseUtils.longForQuery(this, "PRAGMA max_page_count;", null);
         return pageCount * getPageSize();
     }
 
@@ -923,7 +924,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
         if ((numBytes % pageSize) != 0) {
             numPages++;
         }
-        long newPageCount = ExtraUtils.longForQuery(this, "PRAGMA max_page_count = " + numPages,
+        long newPageCount = DatabaseUtils.longForQuery(this, "PRAGMA max_page_count = " + numPages,
                 null);
         return newPageCount * pageSize;
     }
@@ -934,7 +935,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
      * @return the database page size, in bytes
      */
     public long getPageSize() {
-        return ExtraUtils.longForQuery(this, "PRAGMA page_size;", null);
+        return DatabaseUtils.longForQuery(this, "PRAGMA page_size;", null);
     }
 
     /**
@@ -1395,6 +1396,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
 
     /**
      * Convenience method for replacing a row in the database.
+     * Inserts a new row if a row does not already exist.
      *
      * @param table the table in which to replace the row
      * @param nullColumnHack optional; may be <code>null</code>.
@@ -1405,7 +1407,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
      *            provides the name of nullable column name to explicitly insert a NULL into
      *            in the case where your <code>initialValues</code> is empty.
      * @param initialValues this map contains the initial column values for
-     *   the row.
+     *   the row. The keys should be the column names and the values the column values.
      * @return the row ID of the newly inserted row, or -1 if an error occurred
      */
     public long replace(String table, String nullColumnHack, ContentValues initialValues) {
@@ -1420,6 +1422,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
 
     /**
      * Convenience method for replacing a row in the database.
+     * Inserts a new row if a row does not already exist.
      *
      * @param table the table in which to replace the row
      * @param nullColumnHack optional; may be <code>null</code>.
@@ -1430,7 +1433,7 @@ public final class SQLiteDatabase extends SQLiteClosable {
      *            provides the name of nullable column name to explicitly insert a NULL into
      *            in the case where your <code>initialValues</code> is empty.
      * @param initialValues this map contains the initial column values for
-     *   the row. The key
+     *   the row. The keys should be the column names and the values the column values.
      * @throws SQLException
      * @return the row ID of the newly inserted row, or -1 if an error occurred
      */
@@ -1455,10 +1458,9 @@ public final class SQLiteDatabase extends SQLiteClosable {
      *            row. The keys should be the column names and the values the
      *            column values
      * @param conflictAlgorithm for insert conflict resolver
-     * @return the row ID of the newly inserted row
-     * OR the primary key of the existing row if the input param 'conflictAlgorithm' =
-     * {@link #CONFLICT_IGNORE}
-     * OR -1 if any error
+     * @return the row ID of the newly inserted row OR <code>-1</code> if either the
+     *            input parameter <code>conflictAlgorithm</code> = {@link #CONFLICT_IGNORE}
+     *            or an error occurred.
      */
     public long insertWithOnConflict(String table, String nullColumnHack,
             ContentValues initialValues, int conflictAlgorithm) {
@@ -1706,6 +1708,21 @@ public final class SQLiteDatabase extends SQLiteClosable {
         } finally {
             releaseReference();
         }
+    }
+
+    /**
+     * Verifies that a SQL SELECT statement is valid by compiling it.
+     * If the SQL statement is not valid, this method will throw a {@link SQLiteException}.
+     *
+     * @param sql SQL to be validated
+     * @param cancellationSignal A signal to cancel the operation in progress, or null if none.
+     * If the operation is canceled, then {@link OperationCanceledException} will be thrown
+     * when the query is executed.
+     * @throws SQLiteException if {@code sql} is invalid
+     */
+    public void validateSql(String sql, CancellationSignal cancellationSignal) {
+        getThreadSession().prepare(sql,
+                getThreadDefaultConnectionFlags(/* readOnly =*/ true), cancellationSignal, null);
     }
 
     /**
@@ -2205,8 +2222,8 @@ public final class SQLiteDatabase extends SQLiteClosable {
          * See {@link SQLiteCursor#SQLiteCursor(SQLiteCursorDriver, String, SQLiteQuery)}.
          */
         public Cursor newCursor(SQLiteDatabase db,
-                                SQLiteCursorDriver masterQuery, String editTable,
-                                SQLiteQuery query);
+                SQLiteCursorDriver masterQuery, String editTable,
+                SQLiteQuery query);
     }
 
     /**
