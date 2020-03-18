@@ -5,7 +5,7 @@ package org.sqlite.database.enums;
  */
 public enum Tokenizer {
 
-    HTML_TOKENIZER("HTMLTokenizer"), CHARACTER_TOKENIZER("character");
+    CHARACTER_TOKENIZER("character");
 
     private String name;
 

@@ -219,7 +219,9 @@ static jint nativeLoadExtension(JNIEnv* env, jclass obj, jlong connectionPtr, js
         err = sqlite3_load_extension(connection->db, nameStr, 0, &error);
     }
 
-    ALOGE("extension failed: %s", error);
+    if (error) {
+        ALOGE("extension failed: %s", error);
+    }
 
     sqlite3_free(error);
 
